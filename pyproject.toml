@@ -1,0 +1,40 @@
+[project]
+name = "torchrl-hydra-template"
+version = "0.1.0"
+description = "TorchRL + Hydra RL research template"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    # Core deep learning
+    "torch>=2.3.0",
+    "torchrl>=0.5.0",
+    "tensordict>=0.5.0",
+    # Config management
+    "hydra-core>=1.3.2",
+    "omegaconf>=2.3.0",
+    "hydra-colorlog>=1.2.0",
+    # Environments
+    "gymnasium[classic-control,mujoco]>=0.29.0",
+    "ale-py>=0.9.0",
+    "autorom[accept-rom-license]>=0.6.1",
+    "torchvision>=0.18.0",  # Atari pixel transforms (Resize)
+    # Logging
+    "wandb>=0.17.0",
+    "tensorboard>=2.16.0",
+    # Utilities
+    "tqdm>=4.66.0",
+    # Testing
+    "pytest>=8.0.0",
+    "pytest-timeout>=2.3.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+timeout = 300

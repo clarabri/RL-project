@@ -1,0 +1,4 @@
+# @package _global_
+logger:
+  - _target_: src.callbacks.logger.TensorBoardLogger
+    log_dir: ${paths.output_dir}/tensorboard/

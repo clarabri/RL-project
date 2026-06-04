@@ -1,0 +1,39 @@
+_target_: src.algorithms.dqn.DQNAlgorithm
+
+# Callable factories (override via nested configs; requires ``instantiate(cfg.algorithm)``).
+replay_buffer:
+  _partial_: true
+  _target_: torchrl.data.TensorDictReplayBuffer
+  storage:
+    _target_: torchrl.data.LazyTensorStorage
+    max_size: 10_000
+    device: cpu
+
+network:
+  _partial_: true
+  _target_: src.networks.make_mlp_q_net
+  num_cells: [120, 84]
+  # `torch.nn.ReLU` via `_target_` would instantiate a module; MLP needs the class.
+  activation_class:
+    _target_: hydra.utils.get_class
+    path: torch.nn.ReLU
+
+# Optimisation
+lr: 2.5e-4
+gamma: 0.99
+batch_size: 128
+max_grad_norm: 10.0
+
+# Exploration (epsilon-greedy, linear anneal in frames)
+eps_start: 1.0
+eps_end: 0.05
+annealing_frames: 250_000
+
+# Data collection
+frames_per_batch: 1_000
+init_random_frames: 10_000
+max_frames_per_traj: -1
+
+# Learning schedule
+num_updates: 100         # gradient updates per collector batch
+hard_update_freq: 50     # target net <- online every N gradient steps

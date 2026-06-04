@@ -1,0 +1,32 @@
+# Hydra outputs & logs (train, eval, wandb, tensorboard all under logs/)
+logs/
+outputs/
+
+# Weights & Biases (root-level fallback)
+wandb/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Testing & coverage
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Editor
+.vscode/
+.idea/
+*.swp
+
+# OS
+.DS_Store
