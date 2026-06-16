@@ -1,0 +1,15 @@
+# @package _global_
+defaults:
+  - override /algorithm: ppo
+  - override /environment: breakout_train
+  - override /environment@eval_environment: breakout_eval
+  - override /logger: wandb
+  - _self_
+
+trainer:
+  total_frames: 20_000
+  seed: 42
+  accelerator: cpu
+  devices: [0]
+  num_envs: 4
+  log_every_n_steps: 10_000

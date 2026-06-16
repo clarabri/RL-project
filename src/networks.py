@@ -14,6 +14,7 @@ from typing import Sequence, Type
 
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 from torchrl.modules import ConvNet, MLP
 
 
@@ -144,3 +145,67 @@ def NatureDQN(
         activation_class=activation_class,
     )
     return nn.Sequential(cnn, mlp)
+
+def make_atari_ppo_actor(
+    obs_shape: Sequence[int],
+    action_dim: int,
+    *,
+    num_cells_cnn: Sequence[int] = (32, 64, 64),
+    kernel_sizes: Sequence[int] = (8, 4, 3),
+    strides: Sequence[int] = (4, 2, 1),
+    num_cells_mlp: Sequence[int] = (512,),
+    activation_class: Type[nn.Module] = nn.ReLU,
+) -> nn.Module:
+    """CNN -> MLP policy for PPO Atari (outputs logits)."""
+
+    cnn = ConvNet(
+        activation_class=activation_class,
+        num_cells=list(num_cells_cnn),
+        kernel_sizes=list(kernel_sizes),
+        strides=list(strides),
+    )
+
+    with torch.no_grad():
+        cnn_out = cnn(torch.zeros(1, *obs_shape)).flatten(1)
+
+    mlp = MLP(
+        in_features=cnn_out.shape[-1],
+        out_features=action_dim,
+        num_cells=list(num_cells_mlp),
+        activation_class=activation_class,
+    )
+
+    return nn.Sequential(cnn, nn.Flatten(1), mlp)
+
+def make_atari_ppo_critic(
+    obs_shape: Sequence[int],
+    action_dim: int,
+    *,
+    num_cells_cnn: Sequence[int] = (32, 64, 64),
+    kernel_sizes: Sequence[int] = (8, 4, 3),
+    strides: Sequence[int] = (4, 2, 1),
+    num_cells_mlp: Sequence[int] = (512,),
+    activation_class: Type[nn.Module] = nn.ReLU,
+) -> nn.Module:
+    """CNN -> MLP value function for PPO Atari."""
+
+    del action_dim  # critic ignores actions
+
+    cnn = ConvNet(
+        activation_class=activation_class,
+        num_cells=list(num_cells_cnn),
+        kernel_sizes=list(kernel_sizes),
+        strides=list(strides),
+    )
+
+    with torch.no_grad():
+        cnn_out = cnn(torch.zeros(1, *obs_shape)).flatten(1)
+
+    mlp = MLP(
+        in_features=cnn_out.shape[-1],
+        out_features=1,
+        num_cells=list(num_cells_mlp),
+        activation_class=activation_class,
+    )
+
+    return nn.Sequential(cnn, nn.Flatten(1), mlp)
