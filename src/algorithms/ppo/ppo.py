@@ -15,9 +15,8 @@ from tensordict import TensorDict
 from tensordict.nn import TensorDictModule
 
 from torchrl.envs import EnvBase
-from tensordict.nn import TensorDictModule
-from torchrl.modules import ProbabilisticActor
-from torchrl.data import OneHot
+from torchrl.data import LazyTensorStorage, TensorDictReplayBuffer, OneHot
+from torchrl.data.replay_buffers.samplers import SamplerWithoutReplacement
 from torchrl.modules import ProbabilisticActor, ValueOperator
 from torchrl.objectives import ClipPPOLoss
 from torchrl.objectives.value import GAE
@@ -60,6 +59,7 @@ class PPOAlgorithm(BaseAlgorithm):
 
         # collection
         frames_per_batch: int = 4096,
+        init_random_frames: int = 0,
         total_frames: int = 40_000_000,
         max_frames_per_traj: int = -1,
     ):
@@ -86,6 +86,7 @@ class PPOAlgorithm(BaseAlgorithm):
         self.mini_batch_size = mini_batch_size
 
         self.frames_per_batch = frames_per_batch
+        self.init_random_frames = init_random_frames
         self.total_frames = total_frames
         self.max_frames_per_traj = max_frames_per_traj
 
@@ -144,11 +145,20 @@ class PPOAlgorithm(BaseAlgorithm):
             gamma=self.gamma,
             lmbda=self.gae_lambda,
             value_network=self.critic,
+            device=self.device,
+        )
+
+        self.data_buffer = TensorDictReplayBuffer(
+            storage=LazyTensorStorage(self.frames_per_batch, device=self.device),
+            sampler=SamplerWithoutReplacement(),
+            batch_size=self.mini_batch_size,
         )
 
         self.optimizer = torch.optim.Adam(
             self.loss_module.parameters(),
             lr=self.lr,
+            eps=self.eps,
+            weight_decay=self.weight_decay,
         )
 
     # ----------------------------------------------------
@@ -159,8 +169,8 @@ class PPOAlgorithm(BaseAlgorithm):
 
         return CollectorConfig(
             frames_per_batch=self.frames_per_batch,
-            init_random_frames=0,
-            max_frames_per_traj=-1,
+            init_random_frames=self.init_random_frames,
+            max_frames_per_traj=self.max_frames_per_traj,
         )
 
     # ----------------------------------------------------
@@ -170,45 +180,47 @@ class PPOAlgorithm(BaseAlgorithm):
     def step(self, batch: TensorDict) -> dict[str, float]:
 
         batch = batch.to(self.device)
+        batch = batch.reshape(-1)
 
         with torch.no_grad():
             batch = self.adv_module(batch)
 
-        metrics = {}
+        self.data_buffer.empty()
+        self.data_buffer.extend(batch)
+
+        actor_losses = []
+        critic_losses = []
+        entropy_losses = []
 
         for _ in range(self.ppo_epochs):
+            for mb in self.data_buffer:
+                mb = mb.to(self.device)
+                loss = self.loss_module(mb)
+                total_loss = loss["loss_objective"] + loss["loss_critic"]
+                if "loss_entropy" in loss.keys():
+                    total_loss = total_loss + loss["loss_entropy"]
 
-            loss = self.loss_module(batch)
+                self.optimizer.zero_grad(set_to_none=True)
+                total_loss.backward()
+                torch.nn.utils.clip_grad_norm_(
+                    self.loss_module.parameters(),
+                    self.max_grad_norm,
+                )
+                self.optimizer.step()
 
-            total_loss = (
-                loss["loss_objective"]
-                + loss["loss_critic"]
-                + loss["loss_entropy"]
-            )
+                actor_losses.append(loss["loss_objective"].detach())
+                critic_losses.append(loss["loss_critic"].detach())
+                entropy_losses.append(
+                    loss["loss_entropy"].detach()
+                    if "loss_entropy" in loss.keys()
+                    else torch.tensor(0.0, device=self.device)
+                )
 
-            self.optimizer.zero_grad()
-
-            total_loss.backward()
-
-            torch.nn.utils.clip_grad_norm_(
-                self.loss_module.parameters(),
-                self.max_grad_norm,
-            )
-
-            self.optimizer.step()
-
-            metrics = {
-                "train/loss_actor":
-                    loss["loss_objective"].item(),
-
-                "train/loss_critic":
-                    loss["loss_critic"].item(),
-
-                "train/loss_entropy":
-                    loss["loss_entropy"].item(),
-            }
-
-        return metrics
+        return {
+            "train/loss_actor": torch.stack(actor_losses).mean().item(),
+            "train/loss_critic": torch.stack(critic_losses).mean().item(),
+            "train/loss_entropy": torch.stack(entropy_losses).mean().item(),
+        }
 
     # ----------------------------------------------------
     # Policy
@@ -239,9 +251,7 @@ class PPOAlgorithm(BaseAlgorithm):
         state: TrainingState,
     ):
 
-        self.loss_module.load_state_dict(
-            state.policy_state_dict
-        )
+        self.loss_module.load_state_dict(state.policy_state_dict)
 
         self.optimizer = torch.optim.Adam(
             self.loss_module.parameters(),
@@ -249,3 +259,5 @@ class PPOAlgorithm(BaseAlgorithm):
             eps=self.eps,
             weight_decay=self.weight_decay,
         )
+        if state.optimizer_state_dict is not None:
+            self.optimizer.load_state_dict(state.optimizer_state_dict)

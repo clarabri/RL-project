@@ -166,7 +166,7 @@ def make_atari_ppo_actor(
     )
 
     with torch.no_grad():
-        cnn_out = cnn(torch.zeros(1, *obs_shape)).flatten(1)
+        cnn_out = cnn(torch.zeros(1, *obs_shape))
 
     mlp = MLP(
         in_features=cnn_out.shape[-1],
@@ -175,7 +175,7 @@ def make_atari_ppo_actor(
         activation_class=activation_class,
     )
 
-    return nn.Sequential(cnn, nn.Flatten(1), mlp)
+    return nn.Sequential(cnn, mlp)
 
 def make_atari_ppo_critic(
     obs_shape: Sequence[int],
@@ -189,7 +189,7 @@ def make_atari_ppo_critic(
 ) -> nn.Module:
     """CNN -> MLP value function for PPO Atari."""
 
-    del action_dim  # critic ignores actions
+    del action_dim
 
     cnn = ConvNet(
         activation_class=activation_class,
@@ -199,7 +199,7 @@ def make_atari_ppo_critic(
     )
 
     with torch.no_grad():
-        cnn_out = cnn(torch.zeros(1, *obs_shape)).flatten(1)
+        cnn_out = cnn(torch.zeros(1, *obs_shape))
 
     mlp = MLP(
         in_features=cnn_out.shape[-1],
@@ -208,4 +208,4 @@ def make_atari_ppo_critic(
         activation_class=activation_class,
     )
 
-    return nn.Sequential(cnn, nn.Flatten(1), mlp)
+    return nn.Sequential(cnn, mlp)
