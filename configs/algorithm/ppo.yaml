@@ -29,12 +29,12 @@ gamma: 0.99
 
 gae_lambda: 0.95
 
-clip_epsilon: 0.1
-critic_coeff: 1.0
-entropy_coeff: 0.01
+clip_epsilon: 0.2
+critic_coeff: 0.25
+entropy_coeff: 0.003
 
-ppo_epochs: 3
-mini_batch_size: 256
+ppo_epochs: 6
+mini_batch_size: 512
 
 anneal_lr: true
 anneal_clip_epsilon: true
@@ -45,5 +45,5 @@ loss_critic_type: l2
 # Collection
 # --------------------------------------------------
 
-frames_per_batch: 1024
+frames_per_batch: 2048
 max_frames_per_traj: -1
