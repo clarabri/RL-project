@@ -93,6 +93,8 @@ class PPOAlgorithm(BaseAlgorithm):
         self._make_actor = actor_network
         self._make_critic = critic_network
 
+        self._update_step = 0
+
     # ----------------------------------------------------
     # Setup
     # ----------------------------------------------------
@@ -138,6 +140,7 @@ class PPOAlgorithm(BaseAlgorithm):
             clip_epsilon=self.clip_epsilon,
             entropy_coeff=self.entropy_coeff,
             critic_coeff=self.critic_coeff,
+            loss_critic_type=self.loss_critic_type,
             normalize_advantage=True,
         )
 
@@ -159,6 +162,15 @@ class PPOAlgorithm(BaseAlgorithm):
             lr=self.lr,
             eps=self.eps,
             weight_decay=self.weight_decay,
+        )
+
+        num_batches = self.total_frames // self.frames_per_batch
+        num_minibatches = self.frames_per_batch // self.mini_batch_size
+
+        self._total_updates = (
+            num_batches
+            * self.ppo_epochs
+            * num_minibatches
         )
 
     # ----------------------------------------------------
@@ -206,6 +218,25 @@ class PPOAlgorithm(BaseAlgorithm):
                     self.loss_module.parameters(),
                     self.max_grad_norm,
                 )
+
+                if self.anneal_lr:
+                    progress = self._update_step / self._total_updates
+                    lr = self.lr * (1 - progress)
+
+                    for group in self.optimizer.param_groups:
+                        group["lr"] = lr
+
+                if self.anneal_clip_epsilon:
+                    progress = self._update_step / self._total_updates
+                    self.loss_module.clip_epsilon.copy_(
+                        torch.tensor(
+                            self.clip_epsilon * (1 - progress),
+                            device=self.device
+                        )
+                    )
+
+                self._update_step += 1
+
                 self.optimizer.step()
 
                 actor_losses.append(loss["loss_objective"].detach())
